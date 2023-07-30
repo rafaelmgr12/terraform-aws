@@ -1,0 +1,61 @@
+---
+- name: Configure Docker and Docker Compose on Amazon Linux 2
+  hosts: docker_server
+  become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python3.7
+    docker_compose_path: /home/ec2/user/docker-compose.yml
+
+  tasks:
+    - name: Atualiza todos os pacotes
+      yum:
+        name: '*'
+        state: latest
+    - name: Atualiza OpenSSL
+      yum:
+        name: openssl
+        state: latest
+
+    - name: Instala o Docker
+      yum:
+        name: docker
+        state: latest
+      notify: Start Docker
+
+    - name: Instala pip3
+      command: curl -O https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py
+      args:
+        creates: /usr/bin/pip3
+
+    - name: Instala Docker Compose via pip3
+      pip:
+        name: docker-compose
+        executable: pip3
+        state: present
+
+    - name: Adiciona o usuário ec2-user ao grupo docker
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes
+
+    - name: Copia arquivo docker-compose da raiz do projeto
+      copy:
+        src: docker-compose.yml
+        dest: "/home/ec2-user/docker-compose.yml"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Executa docker-compose up com build
+      command: docker-compose up --build -d
+      args:
+        chdir: "/home/ec2-user/"
+      become_user: ec2-user
+
+  handlers:
+    - name: Start Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
