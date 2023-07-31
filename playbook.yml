@@ -1,61 +1,79 @@
 ---
-- name: Configure Docker and Docker Compose on Amazon Linux 2
+- name: Instala o Docker, Docker-compose no Ubuntu
   hosts: docker_server
   become: yes
-  vars:
-    ansible_python_interpreter: /usr/bin/python3.7
-    docker_compose_path: /home/ec2/user/docker-compose.yml
-
   tasks:
-    - name: Atualiza todos os pacotes
-      yum:
-        name: '*'
-        state: latest
-    - name: Atualiza OpenSSL
-      yum:
-        name: openssl
-        state: latest
+    - name: Atualiza os pacotes do APT
+      apt:
+        update_cache: true
 
-    - name: Instala o Docker
-      yum:
-        name: docker
-        state: latest
-      notify: Start Docker
-
-    - name: Instala pip3
-      command: curl -O https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py
-      args:
-        creates: /usr/bin/pip3
-
-    - name: Instala Docker Compose via pip3
-      pip:
-        name: docker-compose
-        executable: pip3
+    - name: Instala dependências necessárias
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg-agent
+          - software-properties-common
         state: present
 
-    - name: Adiciona o usuário ec2-user ao grupo docker
-      user:
-        name: ec2-user
-        groups: docker
-        append: yes
+    - name: Adiciona chave GPG oficial do Docker
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
 
-    - name: Copia arquivo docker-compose da raiz do projeto
-      copy:
-        src: docker-compose.yml
-        dest: "/home/ec2-user/docker-compose.yml"
-        owner: root
-        group: root
-        mode: '0644'
+    - name: Adiciona repositório do Docker
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        state: present
 
-    - name: Executa docker-compose up com build
-      command: docker-compose up --build -d
-      args:
-        chdir: "/home/ec2-user/"
-      become_user: ec2-user
+    - name: Instala o Docker
+      apt:
+        name: docker-ce
+        state: present
 
-  handlers:
-    - name: Start Docker
+    - name: Instala o docker-compose
+      get_url:
+        url: https://github.com/docker/compose/releases/download/1.27.4/docker-compose-Linux-{{ lookup('pipe', 'uname -m') }}
+        dest: /usr/local/bin/docker-compose
+        mode: '+x'
+
+    - name: Inicia o daemon do Docker
       systemd:
         name: docker
         state: started
-        enabled: yes
+    - name: Instala pip3
+      apt:
+        name: python3-pip
+        state: present
+
+    - name: Instala módulos Python do docker
+      pip:
+        name:
+          - docker
+          - docker-compose
+        executable: pip3
+
+- name: Adiciona usuário ubuntu ao grupo docker
+  hosts: docker_server
+  become: yes
+  tasks:
+    - name: Adiciona usuário ubuntu ao grupo docker
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+    - name: Reconecta à sessão do servidor
+      meta: reset_connection
+
+- name: Inicia os contêineres do Docker
+  hosts: docker_server
+  tasks:
+    - name: Copia o arquivo docker-compose
+      copy:
+        src: docker-compose.yml
+        dest: /home/ubuntu/docker-compose.yml # caminho atualizado para o usuário Ubuntu
+    - name: Inicia o contêiner
+      docker_compose:
+        project_src: /home/ubuntu # caminho atualizado para o usuário Ubuntu
+        state: present

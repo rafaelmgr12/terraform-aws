@@ -11,13 +11,13 @@ variable ssh_key {}
 variable my_ip {}
 variable ssh_private_key{}
 
-data "aws_ami" "amazon-linux-image" {
+data "aws_ami" "ubuntu-image" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
   }
 
   filter {
@@ -26,8 +26,9 @@ data "aws_ami" "amazon-linux-image" {
   }
 }
 
+
 output "ami_id" {
-  value = data.aws_ami.amazon-linux-image.id
+  value = data.aws_ami.ubuntu-image.id
 }
 
 resource "aws_vpc" "myapp-vpc" {
@@ -116,9 +117,9 @@ output "server-ip" {
 }
 
 resource "aws_instance" "myapp-server" {
-  ami                         = data.aws_ami.amazon-linux-image.id
+  ami                         = data.aws_ami.ubuntu-image.id
   instance_type               = var.instance_type
-  key_name                    = "rafael"
+  key_name                    = "tutorial-ec2"
   associate_public_ip_address = true
   subnet_id                   = aws_subnet.myapp-subnet-1.id
   vpc_security_group_ids      = [aws_security_group.myapp-sg.id]
